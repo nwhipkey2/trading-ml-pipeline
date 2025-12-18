@@ -1,0 +1,15 @@
+universe:
+  - SPY
+  - QQQ
+frequency: "1d"
+
+paths:
+  bronze: "data/bronze"
+  silver: "data/silver"
+  gold:   "data/gold"
+  artifacts: "artifacts"
+
+features:
+  windows: [5, 10, 20]
+labels:
+  horizon_days: 1

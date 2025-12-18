@@ -1,0 +1,17 @@
+# data + artifacts (don’t commit raw data/models)
+data/
+artifacts/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# notebooks
+.ipynb_checkpoints/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
