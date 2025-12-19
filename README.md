@@ -1,14 +1,12 @@
-# stock-ml-pipeline
+## Overview
+This repository implements a macro-aware, cross-asset ML pipeline for
+portfolio allocation and research.
 
-A portable data pipeline for market data -> features -> datasets -> baseline ML training.
+The system:
+- ingests multi-asset market and macro data
+- engineers time-series and cross-sectional features
+- trains panel models with walk-forward validation
+- evaluates strategies using realistic, volatility-targeted backtests
+- is fully containerized for reproducibility and distributed execution
 
-## Quick start (Windows)
-1) Create venv
-2) Install deps
-3) Run pipeline
-
-## Repo layout
-- data/bronze: raw immutable ingests
-- data/silver: cleaned standardized tables
-- data/gold: features + labels
-- artifacts/: models + metrics outputs
+This is a research system, not trading advice.
