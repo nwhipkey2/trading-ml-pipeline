@@ -5,7 +5,8 @@ import yaml
 from src.ingest import IngestConfig, run as run_ingest
 from src.clean import CleanConfig, run as run_clean
 from src.features import FeatureConfig, run as run_features
-from src.train import TrainConfig, run as run_train
+from src.train import WalkForwardConfig, run_walk_forward
+
 
 def load_config() -> dict:
     return yaml.safe_load(Path("config/pipeline.yaml").read_text(encoding="utf-8"))
@@ -39,15 +40,19 @@ def main() -> None:
         )
     )
 
-    metrics = run_train(
-        TrainConfig(
+    result = run_walk_forward(
+        WalkForwardConfig(
             dataset_path=dataset_path,
             artifacts_dir=Path(cfg["paths"]["artifacts"]),
-            test_frac=0.2,
+            train_years=3,
+            test_months=3,
+            step_months=3,
         )
     )
 
+    metrics = result["summary"]
     print("DONE. Metrics saved:", metrics)
+
 
 if __name__ == "__main__":
     main()

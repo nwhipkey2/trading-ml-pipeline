@@ -1,0 +1,31 @@
+services:
+  pipeline-cpu:
+    build: .
+    image: trading-ml-pipeline:latest
+    container_name: trading-ml-pipeline-cpu
+    environment:
+      - DATA_ROOT=/lake/data
+      - ARTIFACT_ROOT=/lake/artifacts
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - ./lake:/data:/app/data
+      - ./lake/artifacts:/app/artifacts
+    working_dir: /app
+
+  pipeline-gpu:
+    build: .
+    image: trading-ml-pipeline:latest
+    container_name: trading-ml-pipeline-gpu
+    environment:
+      - DATA_ROOT=/lake/data
+      - ARTIFACT_ROOT=/lake/artifacts
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - ./lake:/lake
+    working_dir: /app
+    # Use either (A) "gpus" for modern compose, or (B) the legacy runtime lines below.
+    gpus: all
+    # legacy fallback (uncomment if needed):
+    # runtime: nvidia

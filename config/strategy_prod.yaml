@@ -1,0 +1,29 @@
+strategy:
+  name: "panel_logreg_voltarget_top1"
+  horizon_days: 5
+
+signals:
+  top_n: 1
+  min_proba: 0.45
+  hold_days: 5
+
+risk:
+  target_vol_annual: 0.08
+  vol_lookback_days: 20
+  max_leverage: 3.0
+
+costs:
+  cost_bps_per_side: 0.0005
+
+data:
+  dataset_path: "data/gold/final_dataset_cs.parquet"
+  # if you haven’t generated cross-sectional features yet, use:
+  # dataset_path: "data/gold/final_dataset.parquet"
+
+model:
+  type: "logreg"
+  proba_threshold: 0.5
+  class_weight: "balanced"
+
+validation:
+  split_date: "2024-01-01"

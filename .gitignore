@@ -1,6 +1,7 @@
 # data + artifacts (don’t commit raw data/models)
 data/
 artifacts/
+lake/
 
 # python
 __pycache__/
@@ -15,3 +16,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .vscode/
+.idea/
+
+# Docker
+.env
+.env.*
+*.log

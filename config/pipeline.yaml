@@ -1,10 +1,13 @@
 universe:
   - SPY
   - QQQ
+  - DIA
+  - XAU
+  - XAG
 frequency: "1d"
 
 date_range:
-  start: "2020-01-01"
+  start: "1900-01-01"
   end:   "2025-12-18"   # you can change later
 
 paths:

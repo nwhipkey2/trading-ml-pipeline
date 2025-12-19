@@ -1,0 +1,64 @@
+date_range:
+  start: "1990-01-01"
+  end: "2025-12-18"
+
+paths:
+  bronze: "data/bronze"
+  silver: "data/silver"
+
+yield_curves:
+  # US Treasury "Daily Treasury Par Yield Curve Rates" CSV archives
+  us_treasury:
+    enabled: true
+    # Treasury publishes archives by period; keep these updated as Treasury adds new files.
+    archive_urls:
+      - "https://home.treasury.gov/system/files/276/yield-curve-rates-1990-2000.csv"
+      - "https://home.treasury.gov/system/files/276/yield-curve-rates-2001-2010.csv"
+      - "https://home.treasury.gov/system/files/276/yield-curve-rates-2011-2020.csv"
+      - "https://home.treasury.gov/system/files/276/yield-curve-rates-1990-2024.csv"
+
+  # Euro area yield curve from ECB "YC" dataset (spot rates, AAA gov bond composite, Svensson)
+  ecb_yc:
+    enabled: true
+    series_keys:
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_3M"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_6M"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_2Y"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_20Y"
+      - "YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_30Y"
+
+  # Australia RBA gov bond yields table
+  rba_gov_bonds:
+    enabled: true
+    csv_url: "https://www.rba.gov.au/statistics/tables/csv/f2.1-data.csv"
+
+  # Japan MOF JGB curve CSV
+  japan_mof:
+    enabled: true
+    csv_url: "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv"
+
+  # New Zealand RBNZ wholesale interest rates (gov bond benchmarks)
+  # RBNZ pages link to downloadable spreadsheets/CSV (.ashx). You can replace this with the latest link if it changes.
+    rbnz_wholesale:
+    enabled: true
+    # Official B2 “Wholesale interest rates” data files (stable links)
+    xlsx_urls:
+      - "https://rbnz.govt.nz/-/media/project/sites/rbnz/files/statistics/series/b/b2/hb2-daily-close.xlsx"
+      - "https://rbnz.govt.nz/-/media/project/sites/rbnz/files/statistics/series/b/b2/hb2-daily-close-1985-2017.xlsx"
+
+fx:
+  # Majors derived from ECB EXR (central bank publication)
+  ecb_majors:
+    enabled: true
+    currencies_vs_eur: ["USD", "JPY", "GBP", "AUD", "NZD", "CAD", "CHF"]
+    majors:
+      - "EURUSD"
+      - "GBPUSD"
+      - "USDJPY"
+      - "AUDUSD"
+      - "NZDUSD"
+      - "USDCAD"
+      - "USDCHF"
