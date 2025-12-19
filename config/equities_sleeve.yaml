@@ -1,0 +1,37 @@
+data:
+  prices_path: "data/silver/prices.parquet"
+  universe_membership_path: "data/silver/universe_membership.parquet"
+  sector_map_path: "data/silver/sector_map.parquet"
+  panel_out_path: "data/gold/equities_daily_panel.parquet"
+
+model:
+  horizon_days: 5
+  target_col: "target_up_5"
+  features:
+    - ret_1
+    - ret_5
+    - ret_20
+    - vol_20
+    - close_sma_gap_20
+    - close_sma_gap_50
+    - ret_20_rank
+    - vol_20_rank
+    - close_sma_gap_20_rank
+    - sector_ret_20
+    - rel_ret_20_vs_sector
+
+train:
+  train_start: "2012-01-01"
+  train_end: "2023-12-31"
+  test_start: "2024-01-01"
+  test_end: "2025-12-18"
+
+signals:
+  out_path: "artifacts/signals/equities_gpu/signals.parquet"
+  top_k: 50
+  min_score: 0.0
+  side: "long"
+
+risk:
+  target_vol_annual: 0.10
+  max_leverage: 3.0

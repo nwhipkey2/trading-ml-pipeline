@@ -3,11 +3,21 @@ data/
 artifacts/
 lake/
 
-# python
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
 .venv/
 .env
+
+# Credentials / secrets
+*.key
+*.pem
+*.env
+config/*secret*
+config/*token*
 
 # notebooks
 .ipynb_checkpoints/
@@ -22,3 +32,7 @@ Thumbs.db
 .env
 .env.*
 *.log
+
+# IDE
+.vscode/
+.idea/
