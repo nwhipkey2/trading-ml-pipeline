@@ -2,104 +2,143 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import numpy as np
 import pandas as pd
-
-from src.lake.calendar import to_utc
-from src.lake.io import ParquetIO
 
 
 @dataclass
 class BuildDailyPanelConfig:
+    membership_path: str = "data/silver/universe_membership.parquet"
     prices_path: str = "data/silver/prices_daily.parquet"
-    universe_membership_path: str = "data/silver/universe_membership.parquet"
     sector_map_path: str = "data/silver/sector_map.parquet"
     out_path: str = "data/gold/equities_daily_panel.parquet"
 
-    horizon_days: int = 5  # target horizon
+    vol_window: int = 20
+    sma_fast: int = 20
+    sma_slow: int = 50
+
+    fwd_horizon_days: int = 5
+    min_history: int = 60
 
 
-def _add_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
-    # expects: timestamp, symbol, close
-    g = df.groupby("symbol", group_keys=False)
-
-    df["ret_1"] = g["close"].pct_change()
-    df["ret_5"] = g["close"].pct_change(5)
-    df["ret_20"] = g["close"].pct_change(20)
-
-    df["vol_20"] = g["ret_1"].rolling(20).std().reset_index(level=0, drop=True)
-
-    df["sma_20"] = g["close"].rolling(20).mean().reset_index(level=0, drop=True)
-    df["sma_50"] = g["close"].rolling(50).mean().reset_index(level=0, drop=True)
-
-    df["close_sma_gap_20"] = (df["close"] / df["sma_20"]) - 1.0
-    df["close_sma_gap_50"] = (df["close"] / df["sma_50"]) - 1.0
-
-    return df
+def _as_utc(ts: pd.Series) -> pd.Series:
+    return pd.to_datetime(ts, utc=True, errors="coerce")
 
 
-def _add_cross_sectional_ranks(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    g = df.groupby("timestamp", group_keys=False)
-    for c in cols:
-        if c not in df.columns:
-            continue
-        df[f"{c}_rank"] = g[c].rank(pct=True, method="average")
-    return df
+def _to_date(ts: pd.Series) -> pd.Series:
+    # Normalize to midnight UTC so membership and prices align
+    return _as_utc(ts).dt.floor("D")
 
 
-def run(cfg: BuildDailyPanelConfig) -> Path:
-    io = ParquetIO()
+def run(cfg: BuildDailyPanelConfig) -> None:
+    mem = pd.read_parquet(Path(cfg.membership_path)).copy()
+    prices = pd.read_parquet(Path(cfg.prices_path)).copy()
+    sector = pd.read_parquet(Path(cfg.sector_map_path)).copy()
 
-    prices = io.read(cfg.prices_path).copy()
-    # Required columns
-    need = {"timestamp", "symbol", "close"}
-    if not need.issubset(prices.columns):
-        raise ValueError(f"prices_daily.parquet must contain {need}. Found: {list(prices.columns)}")
+    mem["timestamp"] = _to_date(mem["timestamp"])
+    prices["timestamp"] = _to_date(prices["timestamp"])
 
-    prices["timestamp"] = to_utc(prices["timestamp"])
-    prices["symbol"] = prices["symbol"].astype(str).str.upper().str.strip()
-    prices = prices.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
+    mem["symbol"] = mem["symbol"].astype(str).str.upper()
+    prices["symbol"] = prices["symbol"].astype(str).str.upper()
+    sector["symbol"] = sector["symbol"].astype(str).str.upper()
 
-    uni = io.read(cfg.universe_membership_path).copy()
-    uni["timestamp"] = to_utc(uni["timestamp"])
-    uni["symbol"] = uni["symbol"].astype(str).str.upper().str.strip()
-    uni = uni[uni["in_universe"] == True].copy()
+    mem = mem[mem["in_universe"] == True].copy()
 
-    sec = io.read(cfg.sector_map_path).copy()
-    sec["symbol"] = sec["symbol"].astype(str).str.upper().str.strip()
-    sec = sec.drop_duplicates(subset=["symbol"]).copy()
+    overlap = set(mem["symbol"]).intersection(set(prices["symbol"]))
+    mem = mem[mem["symbol"].isin(overlap)].copy()
+    prices = prices[prices["symbol"].isin(overlap)].copy()
 
-    # Join: prices ∩ universe, then add sector
-    df = pd.merge(prices, uni[["timestamp", "symbol", "index_id", "weight"]], on=["timestamp", "symbol"], how="inner")
-    df = pd.merge(df, sec[["symbol", "sector"]], on="symbol", how="left")
+    out_path = Path(cfg.out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Features
-    df = _add_time_series_features(df)
+    cols_out = [
+        "timestamp","symbol","open","high","low","close","adj_close","volume",
+        "index_id","weight","sector",
+        "ret_1","ret_5","ret_20","vol_20","sma_20","sma_50",
+        "close_sma_gap_20","close_sma_gap_50","sector_ret_20","rel_ret_20_vs_sector",
+        "ret_20_rank","vol_20_rank","close_sma_gap_20_rank","close_sma_gap_50_rank",
+        "rel_ret_20_vs_sector_rank","fwd_ret_5","target_up_5"
+    ]
 
-    # Sector-relative features (simple sector equal-weight return)
-    if "sector" in df.columns:
-        df["sector_ret_20"] = (
-            df.groupby(["timestamp", "sector"])["ret_20"].transform("mean")
-        )
-        df["rel_ret_20_vs_sector"] = df["ret_20"] - df["sector_ret_20"]
-    else:
-        df["sector_ret_20"] = np.nan
-        df["rel_ret_20_vs_sector"] = np.nan
+    if mem.empty or prices.empty:
+        pd.DataFrame(columns=cols_out).to_parquet(out_path, index=False)
+        print(f"Wrote {cfg.out_path} (0 rows, {len(cols_out)} cols) [empty after overlap filter]")
+        return
 
-    # Cross-sectional ranks (per day)
-    rank_cols = ["ret_20", "vol_20", "close_sma_gap_20", "close_sma_gap_50", "rel_ret_20_vs_sector"]
-    df = _add_cross_sectional_ranks(df, rank_cols)
+    df = prices.merge(
+        mem[["timestamp", "symbol", "index_id", "weight"]],
+        on=["timestamp", "symbol"],
+        how="inner",
+        validate="many_to_one",
+    )
 
-    # Target: forward return / up-down label
-    g = df.groupby("symbol", group_keys=False)
-    fwd = g["close"].shift(-cfg.horizon_days) / df["close"] - 1.0
-    df[f"fwd_ret_{cfg.horizon_days}"] = fwd
-    df[f"target_up_{cfg.horizon_days}"] = (fwd > 0).astype(int)
+    df = df.merge(sector[["symbol", "sector"]], on="symbol", how="left")
+    df["sector"] = df["sector"].fillna("Unknown")
 
-    df = df.dropna(subset=["ret_1", "ret_20", f"fwd_ret_{cfg.horizon_days}"]).copy()
-    out = io.write(df, cfg.out_path)
-    print("Wrote", out, f"({len(df)} rows, {len(df.columns)} cols)")
-    return out
+    df = df.sort_values(["symbol", "timestamp"]).reset_index(drop=True)
+
+    df["ret_1"] = df.groupby("symbol")["adj_close"].pct_change(1)
+    df["ret_5"] = df.groupby("symbol")["adj_close"].pct_change(5)
+    df["ret_20"] = df.groupby("symbol")["adj_close"].pct_change(20)
+
+    df["vol_20"] = (
+        df.groupby("symbol")["ret_1"]
+        .rolling(cfg.vol_window)
+        .std()
+        .reset_index(level=0, drop=True)
+    )
+
+    df["sma_20"] = (
+        df.groupby("symbol")["adj_close"]
+        .rolling(cfg.sma_fast)
+        .mean()
+        .reset_index(level=0, drop=True)
+    )
+    df["sma_50"] = (
+        df.groupby("symbol")["adj_close"]
+        .rolling(cfg.sma_slow)
+        .mean()
+        .reset_index(level=0, drop=True)
+    )
+
+    df["close_sma_gap_20"] = df["adj_close"] / df["sma_20"] - 1.0
+    df["close_sma_gap_50"] = df["adj_close"] / df["sma_50"] - 1.0
+
+    df["sector_ret_20"] = df.groupby(["timestamp", "sector"])["ret_20"].transform("mean")
+    df["rel_ret_20_vs_sector"] = df["ret_20"] - df["sector_ret_20"]
+
+    def _rank(s: pd.Series) -> pd.Series:
+        return s.rank(pct=True)
+
+    df["ret_20_rank"] = df.groupby("timestamp")["ret_20"].transform(_rank)
+    df["vol_20_rank"] = df.groupby("timestamp")["vol_20"].transform(_rank)
+    df["close_sma_gap_20_rank"] = df.groupby("timestamp")["close_sma_gap_20"].transform(_rank)
+    df["close_sma_gap_50_rank"] = df.groupby("timestamp")["close_sma_gap_50"].transform(_rank)
+    df["rel_ret_20_vs_sector_rank"] = df.groupby("timestamp")["rel_ret_20_vs_sector"].transform(_rank)
+
+    df["fwd_ret_5"] = (
+        df.groupby("symbol")["adj_close"]
+        .pct_change(cfg.fwd_horizon_days)
+        .shift(-cfg.fwd_horizon_days)
+    )
+    df["target_up_5"] = (df["fwd_ret_5"] > 0).astype("float")
+
+    df["obs_idx"] = df.groupby("symbol").cumcount()
+    df = df[df["obs_idx"] >= cfg.min_history].copy()
+    df = df.drop(columns=["obs_idx"])
+
+    required = [
+        "ret_1","ret_5","ret_20","vol_20","sma_20","sma_50",
+        "close_sma_gap_20","close_sma_gap_50","sector_ret_20","rel_ret_20_vs_sector",
+        "ret_20_rank","vol_20_rank","close_sma_gap_20_rank","close_sma_gap_50_rank",
+        "rel_ret_20_vs_sector_rank","fwd_ret_5","target_up_5"
+    ]
+    df = df.dropna(subset=required)
+
+    # Keep columns in the expected order
+    df = df[cols_out]
+
+    df.to_parquet(out_path, index=False)
+    print(f"Wrote {cfg.out_path} ({len(df)} rows, {df.shape[1]} cols)")
 
 
 if __name__ == "__main__":
